@@ -4,29 +4,29 @@ import { useNavigation } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 
-export default function Diagnosis() {
+export default function IdentificationHome() {
   const navigation = useNavigation();
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Run Tests!!</Text>
+      <Text style={styles.title}>Perform Identification Tests!!</Text>
       <View style={styles.cardContainer}>
-        <TouchableOpacity style={styles.card} onPress={() => navigation.navigate("ADHD")}>
+        <TouchableOpacity style={styles.card} onPress={() => navigation.navigate("ADHDIdentity")}>
           <FontAwesome6 name="brain" size={40} color="#4CAF50" />
           <Text style={styles.cardText}>ADHD</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.card} onPress={() => navigation.navigate("Dyscalculia")}>
+        <TouchableOpacity style={styles.card} onPress={() => navigation.navigate("DyscalIdentify")}>
           <MaterialIcons name="calculate" size={40} color="#FF9800" />
           <Text style={styles.cardText}>Dyscalculia</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.card} onPress={() => navigation.navigate("DysgraHome")}>
+        <TouchableOpacity style={styles.card} onPress={() => navigation.navigate("DysgraphiaIdentify")}>
           <MaterialIcons name="edit" size={40} color="#03A9F4" />
           <Text style={styles.cardText}>Dysgraphia</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.card} onPress={() => navigation.navigate("DyslexiaHome")}>
+        <TouchableOpacity style={styles.card} onPress={() => navigation.navigate("DyslexiaIdenHome")}>
           <MaterialIcons name="menu-book" size={40} color="#E91E63" />
           <Text style={styles.cardText}>Dyslexia</Text>
         </TouchableOpacity>
