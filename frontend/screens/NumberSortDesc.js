@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { useNavigation } from '@react-navigation/native';  // Importing useNavigation hook for navigation
+import { useNavigation } from '@react-navigation/native';
 
 const getRandomNumber = () => Math.floor(Math.random() * 11) + 5; // Random numbers between 5-15
 
@@ -17,19 +17,39 @@ const generateRandomNumbers = () => {
 const SortNumbersDescendingGame = () => {
   const [numbers, setNumbers] = useState([]);
   const [sortedNumbers, setSortedNumbers] = useState([]);
-  const [user, setUser] = useState(null);
   const [userAnswer, setUserAnswer] = useState([]);
+  const [user, setUser] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [timer, setTimer] = useState(60);
 
-  const navigation = useNavigation();  // Hook for navigation to home page
+  const navigation = useNavigation();
 
   useEffect(() => {
     const currentUser = auth.currentUser;
     if (currentUser) setUser(currentUser);
+
     const randomNumbers = generateRandomNumbers();
     setNumbers(randomNumbers);
-    setSortedNumbers([...randomNumbers].sort((a, b) => b - a)); // Sort numbers in descending order
+    setSortedNumbers([...randomNumbers].sort((a, b) => b - a));
+
+    const interval = setInterval(() => {
+      setTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          handleTimeout();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, []);
+
+  const handleTimeout = () => {
+    Alert.alert('Time Up!', 'You ran out of time. Try again.');
+    resetGame();
+  };
 
   const handleClick = (num) => {
     if (userAnswer.length < 5) {
@@ -39,13 +59,19 @@ const SortNumbersDescendingGame = () => {
 
   const handleSubmit = async () => {
     if (userAnswer.length !== 5) {
-      Alert.alert('Please select all numbers before submitting!');
+      Alert.alert('Incomplete!', 'Please select all numbers before submitting!');
       return;
     }
 
     const isCorrect = JSON.stringify(userAnswer) === JSON.stringify(sortedNumbers);
+    if (isCorrect) {
+      Alert.alert('Correct!', 'You sorted the numbers correctly!');
+    } else {
+      Alert.alert('Wrong!', 'Your sorting is incorrect.');
+    }
 
-    // Saving to database
+    clearInterval(timer); // Stop the timer
+
     if (user) {
       const userRef = doc(db, 'number_sorting_desc', user.email);
       const userDoc = await getDoc(userRef);
@@ -55,22 +81,30 @@ const SortNumbersDescendingGame = () => {
       }
 
       newData.attempts.push({ attempt: newData.attempts.length + 1, score: isCorrect ? 1 : 0 });
-
       await setDoc(userRef, newData);
-      Alert.alert(isCorrect ? 'Correct!' : 'Wrong!', `Your score: ${isCorrect ? 1 : 0}`);
-
-      setIsSubmitted(true);
-
-      // Navigate to home screen if the answer is correct
-      if (isCorrect) {
-        navigation.navigate('Dyscalculia');  // Adjust with your Home screen name
-      }
     }
+
+    if (isCorrect) {
+      navigation.goBack();
+    }
+
+    resetGame();
+  };
+
+  const resetGame = () => {
+    const randomNumbers = generateRandomNumbers();
+    setNumbers(randomNumbers);
+    setSortedNumbers([...randomNumbers].sort((a, b) => b - a));
+    setUserAnswer([]);
+    setIsSubmitted(false);
+    setTimer(60);
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Sort the numbers in Descending Order!</Text>
+      <Text style={styles.timerText}>Time Left: {timer} seconds</Text>
+
       <View style={styles.numbersContainer}>
         {numbers.map((num, index) => (
           <TouchableOpacity
@@ -114,6 +148,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  timerText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'red',
     marginBottom: 20,
   },
   numbersContainer: {

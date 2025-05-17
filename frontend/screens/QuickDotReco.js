@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { RadioButton } from 'react-native-paper';
 import { auth, db } from '../firebaseConfig'; 
-import { collection, doc, getDoc, setDoc } from 'firebase/firestore';
-import { useNavigation } from '@react-navigation/native';  // Import the navigation hook
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
 const getRandomNumber = () => Math.floor(Math.random() * 11) + 5; // 5-15 dots
 
@@ -22,14 +22,50 @@ export default function DotCountingGame() {
   const [options, setOptions] = useState([]);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [user, setUser] = useState(null);
-  
-  const navigation = useNavigation();  // Hook for navigation
+  const [timer, setTimer] = useState(60); // Timer starts at 60 seconds
+  const [intervalId, setIntervalId] = useState(null);
+  const [timeUp, setTimeUp] = useState(false); // Track if time is up
+  const navigation = useNavigation();
 
   useEffect(() => {
     const currentUser = auth.currentUser;
     if (currentUser) setUser(currentUser);
     setOptions(generateOptions(dotCount));
+    startTimer();
+
+    return () => clearInterval(intervalId); // Cleanup timer on unmount
   }, [dotCount]);
+
+  const startTimer = () => {
+    clearInterval(intervalId); // Clear any existing interval
+    const id = setInterval(() => {
+      setTimer((prevTime) => {
+        if (prevTime === 1) {
+          clearInterval(id);
+          setTimeUp(true); // Set time-up flag
+        }
+        return prevTime - 1;
+      });
+    }, 1000);
+
+    setIntervalId(id);
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        clearInterval(intervalId); // Clear interval when navigating away
+      };
+    }, [intervalId])
+  );
+
+  useEffect(() => {
+    if (timeUp) {
+      Alert.alert('Time is up!', 'Navigating back to the previous page.');
+      clearInterval(intervalId); // Ensure the timer is stopped
+      navigation.goBack(); // Navigate back when time is up
+    }
+  }, [timeUp, navigation]);
 
   const checkAnswer = async () => {
     if (selectedAnswer === null) {
@@ -53,20 +89,30 @@ export default function DotCountingGame() {
       await setDoc(userRef, newData);
       Alert.alert(isCorrect ? 'Correct!' : 'Wrong!', `Your score: ${score}`);
       
-      // Navigate to Home screen if the answer is correct
       if (isCorrect) {
-        navigation.navigate('Dyscalculia');  // Adjust with your Home screen name
+        clearInterval(intervalId); // Stop the timer
+        navigation.goBack();
+        return; // Prevent resetting the game when navigating
       }
     }
 
+    resetGame();
+  };
+
+  const resetGame = () => {
+    clearInterval(intervalId); // Clear the interval
     setDotCount(getRandomNumber());
     setOptions(generateOptions(dotCount));
     setSelectedAnswer(null);
+    setTimer(60); // Reset timer
+    setTimeUp(false); // Reset time-up flag
+    startTimer();
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Dot Counting Game</Text>
+      <Text style={styles.timer}>{`Time Left: ${timer}s`}</Text>
       <View style={styles.dotContainer}>
         {Array.from({ length: dotCount }).map((_, index) => (
           <Text key={index} style={styles.dot}>⚫</Text>
@@ -90,6 +136,7 @@ export default function DotCountingGame() {
 const styles = StyleSheet.create({
   container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f5f5' },
   title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
+  timer: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, color: '#FF0000' },
   dotContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginBottom: 20 },
   dot: { fontSize: 40, margin: 5 },
   radioButtonContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },

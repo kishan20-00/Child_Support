@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { auth, db } from '../firebaseConfig'; // Firebase config
-import { collection, query, where, getDocs, doc, setDoc, addDoc } from 'firebase/firestore';
+import { auth, db } from '../firebaseConfig';
+import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
+import { useNavigation } from '@react-navigation/native';
 
-// Emojis for the cards
 const emojis = ['🍎', '🌳', '🚩', '🐶', '🍕', '🎈', '🚗', '📚', '⚽', '🍦'];
 
 const MahjongGame = () => {
@@ -14,66 +14,61 @@ const MahjongGame = () => {
   const [time, setTime] = useState(0);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);
-  const [age, setAge] = useState(null); // Age fetched from Firebase
+  const [age, setAge] = useState(null);
+  const [user, setUser] = useState(null);
+  const navigation = useNavigation();
 
-  // Fetch user's age from Firebase
+  // Fetch user data from Firebase
   useEffect(() => {
-    const fetchAge = async () => {
-      const user = auth.currentUser;
-      if (user) {
-        // Query the users collection to find the document with the matching email
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('email', '==', user.email));
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-          // Assuming there's only one document with the user's email
-          const userDoc = querySnapshot.docs[0];
-          setAge(userDoc.data().age); // Set age from profile
-        } else {
-          Alert.alert('Error', 'User profile not found.');
-        }
-      }
-    };
-
-    fetchAge();
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      setUser(currentUser);
+      fetchUserAge(currentUser);
+    }
   }, []);
 
+  const fetchUserAge = async (user) => {
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', user.email));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        const userDoc = querySnapshot.docs[0];
+        setAge(userDoc.data().age);
+      } else {
+        Alert.alert('Error', 'User profile not found.');
+      }
+    } catch (error) {
+      console.error("Error fetching user age:", error);
+    }
+  };
+
   // Generate cards based on age
-const generateCards = () => {
-  if (!age) {
-    Alert.alert('Error', 'Age not found in profile.');
-    return;
-  }
+  const generateCards = () => {
+    if (!age) {
+      Alert.alert('Error', 'Age not found in profile.');
+      return;
+    }
 
-  // Convert age to a number (if it's a string)
-  const userAge = Number(age);
+    const userAge = Number(age);
+    const numMatches = userAge === 8 ? 4 : 7;
+    const selectedEmojis = emojis.slice(0, numMatches);
+    const doubledEmojis = [...selectedEmojis, ...selectedEmojis];
+    const shuffledEmojis = doubledEmojis.sort(() => Math.random() - 0.5);
 
-  // Set numMatches based on age
-  const numMatches = userAge === 8 ? 4 : 7; // Number of matches based on age
-  console.log(`Age: ${userAge}, numMatches: ${numMatches}`); // Debugging
-
-  const selectedEmojis = emojis.slice(0, numMatches); // Select emojis
-  console.log('Selected Emojis:', selectedEmojis); // Debugging
-
-  const doubledEmojis = [...selectedEmojis, ...selectedEmojis]; // Double for matching pairs
-  console.log('Doubled Emojis:', doubledEmojis); // Debugging
-
-  const shuffledEmojis = doubledEmojis.sort(() => Math.random() - 0.5); // Shuffle
-  console.log('Shuffled Emojis:', shuffledEmojis); // Debugging
-
-  setCards(shuffledEmojis.map((emoji, index) => ({ id: index, emoji, flipped: false })));
-  setFlipped([]);
-  setMatched([]);
-  setScore(0);
-  setTime(0);
-  setGameStarted(true);
-  setGameOver(false);
-};
+    setCards(shuffledEmojis.map((emoji, index) => ({ id: index, emoji, flipped: false })));
+    setFlipped([]);
+    setMatched([]);
+    setScore(0);
+    setTime(0);
+    setGameStarted(true);
+    setGameOver(false);
+  };
 
   // Handle card flip
   const handleFlip = (index) => {
-    if (flipped.length === 2 || matched.includes(index)) return; // Allow only 2 flips at a time
+    if (flipped.length === 2 || matched.includes(index)) return;
 
     const newCards = [...cards];
     newCards[index].flipped = true;
@@ -86,9 +81,10 @@ const generateCards = () => {
       const [firstIndex, secondIndex] = newFlipped;
       if (cards[firstIndex].emoji === cards[secondIndex].emoji) {
         setMatched([...matched, firstIndex, secondIndex]);
-        setScore((prevScore) => prevScore + 10); // Increase score for a match
+        setScore((prevScore) => prevScore + 10);
         if (matched.length + 2 === cards.length) {
-          setGameOver(true); // End game if all matches are found
+          setGameOver(true);
+          handleGameEnd(true);
         }
       } else {
         setTimeout(() => {
@@ -96,7 +92,7 @@ const generateCards = () => {
           resetCards[firstIndex].flipped = false;
           resetCards[secondIndex].flipped = false;
           setCards(resetCards);
-        }, 1000); // Flip back after 1 second if no match
+        }, 1000);
       }
       setFlipped([]);
     }
@@ -113,24 +109,43 @@ const generateCards = () => {
     return () => clearInterval(timerInterval);
   }, [gameStarted, gameOver]);
 
-  // Save score to Firebase
-  const saveScore = async () => {
-    const user = auth.currentUser;
-    if (user) {
-      try {
-        await addDoc(collection(db, 'adhd_mitigation'), {
-          userEmail: user.email, // Store user email
-          score: score,
-          time: time,
-          gameName: 'Mahjong Matching Game',
-          timestamp: new Date(),
-        });
-        Alert.alert('Game Over!', `Your score: ${score}`, [
-          { text: 'OK', onPress: () => setGameStarted(false) },
-        ]);
-      } catch (error) {
-        console.error('Error saving score:', error);
-      }
+  // Handle game end
+  const handleGameEnd = async (won) => {
+    if (!user.email) {
+      console.log("User not found, cannot save result!");
+      return;
+    }
+
+    const userRef = doc(db, "mahjong_game", user.email);
+
+    try {
+      const userDoc = await getDoc(userRef);
+      const attempts = userDoc.exists() ? userDoc.data().attempts || [] : [];
+      
+      const newAttempt = {
+        attempt: attempts.length + 1,
+        score: score,
+        timeTaken: time,
+        matchedPairs: matched.length / 2,
+        totalPairs: cards.length / 2,
+        age: age,
+        won: won,
+        timestamp: new Date().toISOString()
+      };
+
+      await setDoc(userRef, {
+        email: user.email,
+        attempts: [...attempts, newAttempt],
+      }, { merge: true });
+
+      Alert.alert(
+        won ? "Congratulations!" : "Game Over",
+        `You matched ${matched.length / 2} pairs in ${time} seconds!`,
+        [{ text: "OK" }]
+      );
+      navigation.goBack();
+    } catch (error) {
+      console.error("Error saving game result:", error);
     }
   };
 
@@ -159,6 +174,9 @@ const generateCards = () => {
         <View style={styles.gameContainer}>
           <Text style={styles.timer}>Time: {time}s</Text>
           <Text style={styles.score}>Score: {score}</Text>
+          <Text style={styles.pairs}>
+            Pairs: {matched.length / 2}/{cards.length / 2}
+          </Text>
           <View style={styles.grid}>
             {cards.map((card, index) => (
               <TouchableOpacity
@@ -173,11 +191,6 @@ const generateCards = () => {
               </TouchableOpacity>
             ))}
           </View>
-          {gameOver && (
-            <TouchableOpacity style={styles.button} onPress={saveScore}>
-              <Text style={styles.buttonText}>Save Score</Text>
-            </TouchableOpacity>
-          )}
           <TouchableOpacity style={styles.button} onPress={resetGame}>
             <Text style={styles.buttonText}>Reset Game</Text>
           </TouchableOpacity>
@@ -193,6 +206,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
+    padding: 20
   },
   startContainer: {
     alignItems: 'center',
@@ -201,36 +215,48 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 20,
+    color: '#333'
   },
   instruction: {
     fontSize: 18,
     marginBottom: 20,
+    color: '#666'
   },
   gameContainer: {
     alignItems: 'center',
+    width: '100%'
   },
   timer: {
     fontSize: 18,
-    marginBottom: 10,
+    marginBottom: 5,
+    color: '#333'
   },
   score: {
     fontSize: 18,
+    marginBottom: 5,
+    color: '#333'
+  },
+  pairs: {
+    fontSize: 18,
     marginBottom: 20,
+    color: '#333'
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     marginBottom: 20,
+    width: '100%'
   },
   card: {
-    width: 80,
-    height: 80,
+    width: 70,
+    height: 70,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#007BFF',
     margin: 5,
     borderRadius: 10,
+    elevation: 3
   },
   cardFlipped: {
     backgroundColor: '#fff',
@@ -240,9 +266,11 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: '#007BFF',
-    padding: 10,
-    borderRadius: 5,
+    padding: 12,
+    borderRadius: 8,
     marginTop: 10,
+    minWidth: 150,
+    alignItems: 'center'
   },
   buttonText: {
     color: '#fff',

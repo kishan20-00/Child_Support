@@ -24,16 +24,13 @@ const DyscalHome = () => {
   ];
 
   const mitigation = [
-    { title: 'Pattern Recognition', screen: 'PatternReco', icon: 'chart-bell-curve' },
-    { title: 'Number Line Placement', screen: 'NumberLinePlacement', icon: 'ray-start-end' },
-    { title: 'Make a Number', screen: 'MakeNumber', icon: 'numeric' },
-    { title: 'Roll Dices', screen: 'RollDice', icon: 'dice-multiple' },
-    { title: 'Find the Difference Game', screen: 'Differ', icon: 'image-search-outline' },
-    { title: 'Count the Bends', screen: 'CountBend', icon: 'waveform' },
-    { title: 'Count the Legs of Animals', screen: 'CountLegs', icon: 'paw' },
-    { title: 'Count the Small Units', screen: 'MeasureUnits', icon: 'ruler-square' },
-    { title: 'Rearrange the Numbers', screen: 'RearrangeNumbers', icon: 'sort' },
-    { title: 'Match the Numbers', screen: 'NumberMatching', icon: 'numeric' },
+    { title: 'Addition Collection', screen: 'AdditionCol', icon: 'plus-box-multiple' },
+    { title: 'Subtraction Collection', screen: 'SubsCol', icon: 'minus-box-multiple' },
+    { title: 'Ascending Descending Collection', screen: 'OrdCol', icon: 'sort-variant' },
+    { title: 'Pattern Collection', screen: 'PatternColl', icon: 'chart-areaspline' },
+    { title: 'Length Collection', screen: 'LengthColl', icon: 'ruler-square' },
+    { title: 'Money Collection', screen: 'MoneyColl', icon: 'wallet' },
+    { title: 'Object Collection', screen: 'ObjectColl', icon: 'shape' },
   ];
 
   const renderCards = (title, data) => (

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
@@ -10,29 +10,58 @@ const generateEquation = () => {
   const start = getRandomNumber(10, 30); // Start number (10-30)
   const hidden = getRandomNumber(1, 9);  // Hidden number (1-9)
   const result = start - hidden;
-  return { start, hidden, result };
+
+  // Generate 4 options including the correct one
+  const options = new Set();
+  options.add(hidden);
+  while (options.size < 4) {
+    options.add(getRandomNumber(1, 9));
+  }
+
+  // Shuffle options
+  const shuffledOptions = Array.from(options).sort(() => Math.random() - 0.5);
+
+  return { start, hidden, result, options: shuffledOptions };
 };
 
 function SubtractionStoryProblem() {
-  const [equation, setEquation] = useState({});
-  const [userAnswer, setUserAnswer] = useState('');
+  const [equation, setEquation] = useState(generateEquation());
   const [user, setUser] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [timerId, setTimerId] = useState(null);
 
   const navigation = useNavigation();
 
   useEffect(() => {
     const currentUser = auth.currentUser;
     if (currentUser) setUser(currentUser);
-    setEquation(generateEquation());
+
+    // Start the timer when the component mounts
+    const id = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(id);
+          handleTimeOut();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    setTimerId(id);
+
+    return () => clearInterval(id); // Cleanup the timer on unmount
   }, []);
 
-  const checkAnswer = async () => {
-    if (!userAnswer) {
-      Alert.alert('Please enter an answer!');
-      return;
-    }
+  const handleTimeOut = () => {
+    Alert.alert('⏳ Times Up!', 'You didnt answer in time. Try again!');
+    setEquation(generateEquation());
+    setTimeLeft(60);
+  };
 
-    const isCorrect = parseInt(userAnswer) === equation.hidden;
+  const checkAnswer = async (selectedOption) => {
+    clearInterval(timerId); // Stop the timer
+
+    const isCorrect = selectedOption === equation.hidden;
     const score = isCorrect ? 1 : 0;
 
     if (user) {
@@ -47,33 +76,36 @@ function SubtractionStoryProblem() {
       newData.attempts.push({ attempt: newData.attempts.length + 1, score });
 
       await setDoc(userRef, newData);
-      Alert.alert(isCorrect ? 'Correct!' : 'Wrong!', `Your score: ${score}`);
+      Alert.alert(isCorrect ? '✅ Correct!' : '❌ Wrong!', `Your score: ${score}`);
 
-      // Navigate to Home if correct
       if (isCorrect) {
-        navigation.navigate('Dyscalculia');
+        navigation.goBack();
+        return;
       }
     }
 
-    // Generate a new equation
     setEquation(generateEquation());
-    setUserAnswer('');
+    setTimeLeft(60); // Reset the timer for the new equation
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Find the Missing Number</Text>
+      <Text style={styles.timer}>⏱ Time Left: {timeLeft}s</Text>
       <Text style={styles.equation}>{equation.start} - ? = {equation.result}</Text>
-      <TextInput
-        style={styles.input}
-        keyboardType="numeric"
-        placeholder="Enter the missing number"
-        value={userAnswer}
-        onChangeText={setUserAnswer}
-      />
-      <TouchableOpacity style={styles.button} onPress={checkAnswer}>
-        <Text style={styles.buttonText}>Submit</Text>
-      </TouchableOpacity>
+
+      {/* Multiple-Choice Options */}
+      <View style={styles.optionsContainer}>
+        {equation.options.map((option, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.optionButton}
+            onPress={() => checkAnswer(option)}
+          >
+            <Text style={styles.optionText}>{option}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </View>
   );
 }
@@ -81,10 +113,11 @@ function SubtractionStoryProblem() {
 const styles = StyleSheet.create({
   container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f5f5' },
   title: { fontSize: 22, fontWeight: 'bold', marginBottom: 20 },
+  timer: { fontSize: 18, color: 'red', marginBottom: 20 },
   equation: { fontSize: 26, fontWeight: 'bold', marginBottom: 20 },
-  input: { borderWidth: 1, borderColor: '#ccc', padding: 10, width: '50%', textAlign: 'center', fontSize: 18, marginBottom: 20 },
-  button: { backgroundColor: '#FF5733', padding: 10, borderRadius: 5 },
-  buttonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  optionsContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginVertical: 20 },
+  optionButton: { backgroundColor: '#FF5733', padding: 15, borderRadius: 8, margin: 5, minWidth: '40%', alignItems: 'center' },
+  optionText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
 });
 
 export default SubtractionStoryProblem;

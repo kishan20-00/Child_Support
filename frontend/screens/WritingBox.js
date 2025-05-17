@@ -82,7 +82,7 @@ const DysgraphiaUploadScreen = () => {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text variant="headlineMedium" style={styles.title}>
-        Dyslexia Detection
+        Dysgraphia Detection
       </Text>
 
       {/* Display the selected image */}

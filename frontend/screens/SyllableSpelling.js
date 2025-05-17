@@ -5,7 +5,7 @@ import axios from 'axios';
 
 const SyllableSpeakingScreen = () => {
   // List of syllables for the user to pronounce
-  const syllables = ['ba', 'ta', 'ka', 'ma', 'la', 'sa', 'na', 'pa', 'da', 'ga'];
+  const syllables = [' ba', ' ta', ' ka', ' ma', ' la', ' sa', ' na', ' pa', ' da', ' ga'];
 
   // State to manage recording and results
   const [recording, setRecording] = useState(null);

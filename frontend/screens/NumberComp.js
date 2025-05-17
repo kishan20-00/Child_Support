@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -39,6 +39,8 @@ const NumberPatternGame = () => {
   const [pattern, setPattern] = useState([]);
   const [correctIndex, setCorrectIndex] = useState(null);
   const [user, setUser] = useState(null);
+  const [timer, setTimer] = useState(60); // Timer starting at 60 seconds
+  const timerRef = useRef(null);
   const navigation = useNavigation(); // Initialize navigation hook
 
   useEffect(() => {
@@ -47,6 +49,24 @@ const NumberPatternGame = () => {
     const { displayedSequence, correctIndex } = generatePattern();
     setPattern(displayedSequence);
     setCorrectIndex(correctIndex);
+
+    // Start the timer countdown
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setTimer((prevTimer) => {
+        if (prevTimer <= 1) {
+          clearInterval(timerRef.current);
+          handleGameLoss();
+          return 0;
+        }
+        return prevTimer - 1;
+      });
+    }, 1000);
+
+    return () => {
+      // Cleanup the timer when navigating away
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, []);
 
   // Handle user selection
@@ -56,6 +76,7 @@ const NumberPatternGame = () => {
       Alert.alert('Correct!', 'You found the wrong number.', [
         { text: 'OK', onPress: () => navigateToHome() },
       ]);
+      clearInterval(timerRef.current); // Stop the timer when the game is won
     } else {
       await saveScore(false); // Incorrect answer, save score as 0
       Alert.alert('Wrong!', 'Try again.');
@@ -89,16 +110,24 @@ const NumberPatternGame = () => {
     const { displayedSequence, correctIndex } = generatePattern();
     setPattern(displayedSequence);
     setCorrectIndex(correctIndex);
+    setTimer(60); // Reset the timer to 60 seconds
+  };
+
+  // Handle game loss (timer runs out)
+  const handleGameLoss = () => {
+    Alert.alert('Time Up!', 'You didn\'t answer in time. Game over.');
+    resetGame();
   };
 
   // Navigate to Home screen
   const navigateToHome = () => {
-    navigation.navigate('Dyscalculia'); // Adjust with your Home screen name
+    navigation.goBack(); // Adjust with your Home screen name
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Find the incorrect number!</Text>
+      <Text style={styles.timer}>Time Remaining: {timer}s</Text>
       <View style={styles.sequenceContainer}>
         {pattern.map((num, index) => (
           <TouchableOpacity
@@ -125,6 +154,12 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 20,
+  },
+  timer: {
+    fontSize: 18,
+    marginBottom: 20,
+    color: 'red',
+    fontWeight: 'bold',
   },
   sequenceContainer: {
     flexDirection: 'row',

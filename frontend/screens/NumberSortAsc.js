@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { auth, db } from '../firebaseConfig';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { useNavigation } from '@react-navigation/native'; // Navigation hook
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { useNavigation } from '@react-navigation/native';
 
 // Function to generate random numbers for sorting
 const generateRandomNumbers = () => {
@@ -19,6 +19,8 @@ const NumberSortingGame = () => {
   const [userAnswer, setUserAnswer] = useState([]);
   const [user, setUser] = useState(null);
   const [selectedNumbers, setSelectedNumbers] = useState([]); // To display clicked numbers
+  const [timer, setTimer] = useState(60); // Timer state
+  const timerIntervalRef = useRef(null); // Ref to store the timer interval
   const navigation = useNavigation(); // Navigation hook for screen transitions
 
   useEffect(() => {
@@ -27,6 +29,22 @@ const NumberSortingGame = () => {
     const randomNumbers = generateRandomNumbers();
     setNumbers(randomNumbers);
     setSortedNumbers([...randomNumbers].sort((a, b) => a - b)); // Sort numbers
+
+    // Start the timer
+    timerIntervalRef.current = setInterval(() => {
+      setTimer((prevTime) => {
+        if (prevTime <= 1) {
+          clearInterval(timerIntervalRef.current); // Stop the timer when time expires
+          handleGameLost();
+          return 0;
+        }
+        return prevTime - 1;
+      });
+    }, 1000);
+
+    return () => {
+      clearInterval(timerIntervalRef.current); // Clean up timer on unmount or when the game ends
+    };
   }, []);
 
   const handleOptionPress = (number) => {
@@ -57,9 +75,9 @@ const NumberSortingGame = () => {
       await setDoc(userRef, newData);
       Alert.alert(isCorrect ? 'Correct!' : 'Wrong!', `Your score: ${score}`);
 
-      // Navigate to Home screen if correct
       if (isCorrect) {
-        navigation.navigate('Dyscalculia'); // Adjust the screen name to your Home page
+        clearInterval(timerIntervalRef.current); // Stop the timer when the game is won
+        navigation.goBack(); // Adjust the screen name to your Home page
       }
     }
 
@@ -71,9 +89,26 @@ const NumberSortingGame = () => {
     setSelectedNumbers([]); // Clear selected numbers display
   };
 
+  const handleGameLost = () => {
+    setTimer(0);
+    Alert.alert('Times up!', 'You lost the game because time expired!');
+    const randomNumbers = generateRandomNumbers();
+    setNumbers(randomNumbers);
+    setSortedNumbers([...randomNumbers].sort((a, b) => a - b));
+    setUserAnswer([]);
+    setSelectedNumbers([]);
+  };
+
+  useEffect(() => {
+    return () => {
+      clearInterval(timerIntervalRef.current); // Ensure timer stops if the user navigates away
+    };
+  }, [navigation]);
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Sort the Numbers!</Text>
+      <Text style={styles.timer}>Time left: {timer}s</Text>
       <View style={styles.numberContainer}>
         {numbers.map((num, index) => (
           <TouchableOpacity
@@ -108,6 +143,12 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 20,
+  },
+  timer: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#d32f2f',
   },
   numberContainer: {
     flexDirection: 'row',

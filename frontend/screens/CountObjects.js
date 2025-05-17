@@ -1,46 +1,56 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
-const objects = ['🍎', '🍊', '🍌']; // Different fruit emojis
+const objects = ['🍎', '🍊', '🍌'];
 
 const getRandomObject = () => objects[Math.floor(Math.random() * objects.length)];
-const getRandomCount = () => Math.floor(Math.random() * 9) + 2; // Random count between 2 and 10
+const getRandomCount = () => Math.floor(Math.random() * 9) + 2; // 2–10
+
+const generateOptions = (correctAnswer) => {
+  const opts = new Set([correctAnswer]);
+  while (opts.size < 4) {
+    const rnd = Math.floor(Math.random() * 9) + 2;
+    if (rnd !== correctAnswer) opts.add(rnd);
+  }
+  return Array.from(opts).sort(() => Math.random() - 0.5);
+};
+
+const generateGame = () => {
+  const emoji = getRandomObject();
+  const count = getRandomCount();
+  return {
+    emoji,
+    count,
+    options: generateOptions(count),
+  };
+};
 
 export default function CountObjectsGame() {
-  const [emoji, setEmoji] = useState(getRandomObject());
-  const [count, setCount] = useState(getRandomCount());
-  const [userInput, setUserInput] = useState('');
+  const [gameData, setGameData] = useState(generateGame);
   const [timeLeft, setTimeLeft] = useState(60);
   const [user, setUser] = useState(null);
-  const navigation = useNavigation();
   const timerRef = useRef(null);
+  const navigation = useNavigation();
+  const { emoji, count, options } = gameData;
 
   useEffect(() => {
     const currentUser = auth.currentUser;
     if (currentUser) setUser(currentUser);
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      startTimer();
-
-      return () => {
-        if (timerRef.current) {
-          clearInterval(timerRef.current); // Stop the timer when navigating away
-        }
-      };
-    }, [])
-  );
+  useFocusEffect(useCallback(() => {
+    startTimer();
+    return () => clearInterval(timerRef.current);
+  }, []));
 
   const startTimer = () => {
+    clearInterval(timerRef.current);
     setTimeLeft(60);
-    if (timerRef.current) clearInterval(timerRef.current);
-
     timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
+      setTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
           Alert.alert('Time’s up!', 'Try again.');
@@ -52,39 +62,32 @@ export default function CountObjectsGame() {
     }, 1000);
   };
 
-  const checkAnswer = async () => {
-    const userAnswer = parseInt(userInput, 10);
-    const isCorrect = userAnswer === count;
+  const checkAnswer = async (selected) => {
+    clearInterval(timerRef.current);
+    const isCorrect = selected === count;
     const score = isCorrect ? 1 : 0;
-
-    if (timerRef.current) clearInterval(timerRef.current); // Stop timer when user answers
 
     if (user) {
       const userRef = doc(db, 'count_objects_game', user.email);
       const userDoc = await getDoc(userRef);
-      let newData = { email: user.email, attempts: [] };
-
-      if (userDoc.exists()) {
-        newData = userDoc.data();
-      }
+      const newData = userDoc.exists() 
+        ? userDoc.data() 
+        : { email: user.email, attempts: [] };
 
       newData.attempts.push({ attempt: newData.attempts.length + 1, score });
-
       await setDoc(userRef, newData);
-      Alert.alert(isCorrect ? 'Correct!' : 'Wrong!', `Your score: ${score}`);
+    }
 
-      if (isCorrect) {
-        navigation.navigate('Dyscalculia');
-      } else {
-        resetGame();
-      }
+    Alert.alert(isCorrect ? '✅ Correct!' : '❌ Wrong!', `The right answer was ${count}.`);
+    if (isCorrect) {
+      navigation.goBack();
+    } else {
+      resetGame();
     }
   };
 
   const resetGame = () => {
-    setEmoji(getRandomObject());
-    setCount(getRandomCount());
-    setUserInput('');
+    setGameData(generateGame());
     startTimer();
   };
 
@@ -94,27 +97,29 @@ export default function CountObjectsGame() {
       <Text style={styles.tree}>🌳</Text>
       <Text style={styles.objects}>{emoji.repeat(count)}</Text>
       <Text style={styles.timer}>⏳ {timeLeft}s left</Text>
-      <TextInput
-        style={styles.input}
-        keyboardType="numeric"
-        placeholder="Enter count"
-        value={userInput}
-        onChangeText={setUserInput}
-      />
-      <TouchableOpacity style={styles.button} onPress={checkAnswer}>
-        <Text style={styles.buttonText}>Submit</Text>
-      </TouchableOpacity>
+
+      <View style={styles.optionsContainer}>
+        {options.map((opt, i) => (
+          <TouchableOpacity
+            key={i}
+            style={styles.optionButton}
+            onPress={() => checkAnswer(opt)}
+          >
+            <Text style={styles.optionText}>{opt}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f5f5', marginBottom: 120 },
-  title: { fontSize: 22, fontWeight: 'bold', marginBottom: 20 },
-  tree: { fontSize: 80 },
-  objects: { fontSize: 40, marginVertical: 10 },
-  timer: { fontSize: 18, color: 'red', marginBottom: 20 },
-  input: { width: '50%', height: 40, borderColor: 'gray', borderWidth: 1, marginBottom: 20, textAlign: 'center', fontSize: 20, borderRadius: 5 },
-  button: { backgroundColor: '#4CAF50', padding: 10, borderRadius: 5 },
-  buttonText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+  container:  { flex:1, alignItems:'center', justifyContent:'center', backgroundColor:'#f5f5f5', marginBottom:120 },
+  title:      { fontSize:22, fontWeight:'bold', marginBottom:20 },
+  tree:       { fontSize:80 },
+  objects:    { fontSize:40, marginVertical:10 },
+  timer:      { fontSize:18, color:'red', marginBottom:20 },
+  optionsContainer: { flexDirection:'row', flexWrap:'wrap', justifyContent:'center', marginVertical:20 },
+  optionButton:     { backgroundColor:'#007BFF', padding:15, borderRadius:8, margin:5, minWidth:'40%', alignItems:'center' },
+  optionText:       { color:'#fff', fontSize:18, fontWeight:'bold' },
 });

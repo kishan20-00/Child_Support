@@ -56,6 +56,16 @@ import LetterByLetterPage from './screens/LetterByLetterReco';
 import ObjectDivisionGame from './screens/ObjectDivision';
 import CountApplesGame from './screens/CountApples';
 import MoneyGame from './screens/MoneyGame';
+import AdditionGame from './screens/AdditionCollection';
+import SubsctractionGame from './screens/SubsCollection';
+import AscDescCollection from './screens/AscDescCollection';
+import PatternCollection from './screens/PatternCollection';
+import LengthCollection from './screens/LengthCollection';
+import MoneyCollection from './screens/MoneyCollection';
+import ObjectCollection from './screens/ObjectCollection';
+import DyscalAnalyts from './screens/DyscalculiaAnalysis';
+import AnalysisHome from './screens/AnalysisHome';
+import ADHDAnalytics from './screens/ADHDAnalysis';
 
 const Stack = createStackNavigator();
 const Drawer = createDrawerNavigator();
@@ -121,6 +131,13 @@ function DrawerNavigator() {
         component={Diagnosis}
         options={{
           drawerIcon: ({ color, size }) => <Icon name="heart-plus" color={color} size={size} />,
+        }}
+      />
+      <Drawer.Screen
+        name="Analysis"
+        component={AnalysisHome}
+        options={{
+          drawerIcon: ({ color, size }) => <Icon name="google-analytics" color={color} size={size} />,
         }}
       />
       <Drawer.Screen
@@ -219,17 +236,17 @@ export default function App() {
         <Stack.Screen 
           name="ADHDIdentity" 
           component={ADHDIdentity} 
-          options={{ title: "Number Sort in Descending", headerShown: true }} 
+          options={{ title: "Checking ADHD", headerShown: true }} 
         />
         <Stack.Screen 
           name="DyscalIdentify" 
           component={DyscalculiaIdentify} 
-          options={{ title: "Number Sort in Descending", headerShown: true }} 
+          options={{ title: "Dyscalculia Identification", headerShown: true }} 
         />
         <Stack.Screen 
           name="DyslexIdentify" 
           component={DyslexiaPrediction} 
-          options={{ title: "Number Sort in Descending", headerShown: true }} 
+          options={{ title: "Predicting Dyslexia Possibility", headerShown: true }} 
         />
         <Stack.Screen 
           name="AdditionCounter" 
@@ -365,6 +382,51 @@ export default function App() {
           name="MoneyGame" 
           component={MoneyGame} 
           options={{ title: "Money Game", headerShown: true }} 
+        />
+        <Stack.Screen 
+          name="AdditionCol" 
+          component={AdditionGame} 
+          options={{ title: "Addition Collection", headerShown: true }} 
+        />
+        <Stack.Screen 
+          name="SubsCol" 
+          component={SubsctractionGame} 
+          options={{ title: "Substraction Collection", headerShown: true }} 
+        />
+        <Stack.Screen 
+          name="OrdCol" 
+          component={AscDescCollection} 
+          options={{ title: "Ordering Collection", headerShown: true }} 
+        />
+        <Stack.Screen 
+          name="PatternColl" 
+          component={PatternCollection} 
+          options={{ title: "Pattern Collection", headerShown: true }} 
+        />
+        <Stack.Screen 
+          name="LengthColl" 
+          component={LengthCollection} 
+          options={{ title: "Length Collection", headerShown: true }} 
+        />
+        <Stack.Screen 
+          name="MoneyColl" 
+          component={MoneyCollection} 
+          options={{ title: "Money Collection", headerShown: true }} 
+        />
+        <Stack.Screen 
+          name="ObjectColl" 
+          component={ObjectCollection} 
+          options={{ title: "Object Collection", headerShown: true }} 
+        />
+        <Stack.Screen 
+          name="DyscalAnalytics" 
+          component={DyscalAnalyts} 
+          options={{ title: "Dyscalculia Comparison", headerShown: true }} 
+        />
+        <Stack.Screen 
+          name="ADHDAnalytics" 
+          component={ADHDAnalytics} 
+          options={{ title: "ADHD Comparison", headerShown: true }} 
         />
       </Stack.Navigator>
     </NavigationContainer>

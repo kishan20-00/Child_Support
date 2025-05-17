@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Alert, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
-import { RadioButton } from 'react-native-paper';  
-import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, setDoc } from 'firebase/firestore';
+import { RadioButton } from 'react-native-paper';
+import { auth, db } from '../firebaseConfig';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 const ADHDQuiz = ({navigation}) => {
   const questions = [
@@ -36,6 +36,14 @@ const ADHDQuiz = ({navigation}) => {
   ];
 
   const [answers, setAnswers] = useState(new Array(questions.length).fill(0));
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      setUser(currentUser);
+    }
+  }, []);
 
   const handleAnswerSelect = (index, value) => {
     const newAnswers = [...answers];
@@ -59,27 +67,44 @@ const ADHDQuiz = ({navigation}) => {
   };
 
   const handleSubmit = async () => {
-    const total = answers.reduce((sum, answer) => sum + answer, 0);
-    const tIndex = calculateTIndex(total);
-    const review = getReview(tIndex);
-
-    const user = getAuth().currentUser;
-    if (!user) {
+    if (!user.email) {
       Alert.alert("Error", "Please log in to submit the quiz.");
       return;
     }
 
-    const db = getFirestore();
-    const docRef = doc(db, "ADHD_quiz", user.email);
-    await setDoc(docRef, {
-      tIndex,
-      review,
-      answers,
-      timestamp: new Date().toISOString(),
-    });
+    const total = answers.reduce((sum, answer) => sum + answer, 0);
+    const tIndex = calculateTIndex(total);
+    const review = getReview(tIndex);
 
-    Alert.alert("Quiz Submitted", `T-Index: ${tIndex}, Review: ${review}`);
-    navigation.replace("ADHD");
+    const userRef = doc(db, "ADHD_quiz", user.email);
+
+    try {
+      const userDoc = await getDoc(userRef);
+      const attempts = userDoc.exists() ? userDoc.data().attempts || [] : [];
+      
+      const newAttempt = {
+        attempt: attempts.length + 1,
+        tIndex,
+        review,
+        totalScore: total,
+        answers: [...answers],
+        timestamp: new Date().toISOString()
+      };
+
+      await setDoc(userRef, {
+        email: user.email,
+        attempts: [...attempts, newAttempt],
+      }, { merge: true });
+
+      Alert.alert(
+        "Quiz Submitted", 
+        `T-Index: ${tIndex}\nReview: ${review}`,
+        [{ text: "OK", onPress: () => navigation.goBack() }]
+      );
+    } catch (error) {
+      console.error("Error saving quiz results:", error);
+      Alert.alert("Error", "Failed to save quiz results");
+    }
   };
 
   return (
@@ -102,7 +127,11 @@ const ADHDQuiz = ({navigation}) => {
           </View>
         </View>
       ))}
-      <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+      <TouchableOpacity 
+        style={styles.submitButton} 
+        onPress={handleSubmit}
+        disabled={!user}
+      >
         <Text style={styles.submitText}>Submit Quiz</Text>
       </TouchableOpacity>
     </ScrollView>

@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Image, TouchableOpacity, Text, StyleSheet, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import axios from 'axios';
-import { auth, db } from '../firebaseConfig'; // Firebase config
-import { doc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../firebaseConfig';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
-// Define the objects with their names, coordinates, and radius for clickable area
 const objects = [
   { name: "Tree", x: 160, y: 179, radius: 400 },
   { name: "Teddy Bear", x: 566, y: 293, radius: 400 },
@@ -20,9 +18,17 @@ const FindTheObjectGame = () => {
   const [gameStarted, setGameStarted] = useState(false);
   const [selectedObject, setSelectedObject] = useState(null);
   const [score, setScore] = useState(0);
+  const [user, setUser] = useState(null);
   const navigation = useNavigation();
 
   const imageData = require('../assets/Object.jpg');
+
+  useEffect(() => {
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      setUser(currentUser);
+    }
+  }, []);
 
   // Randomly select an object when the game starts
   useEffect(() => {
@@ -40,7 +46,7 @@ const FindTheObjectGame = () => {
         setTimer((prevTime) => {
           if (prevTime <= 1) {
             clearInterval(timerInterval);
-            handleSubmit("No", 60);
+            handleGameEnd(false, 60);
           }
           return prevTime - 1;
         });
@@ -60,35 +66,51 @@ const FindTheObjectGame = () => {
 
     if (distance <= selectedObject.radius) {
       setFoundObject(true);
-      handleSubmit("Yes", 60 - timer);
+      handleGameEnd(true, 60 - timer);
       setTimer(0);
     }
   };
 
-  const handleSubmit = async (result, timeTaken) => {
-    const user = auth.currentUser;
-    if (user) {
-      try {
-        const gameName = "Find The Object";
+  const handleGameEnd = async (won, timeTaken) => {
+    if (!user.email) {
+      console.log("User not found, cannot save result!");
+      return;
+    }
 
-        await setDoc(doc(db, "focus", user.email), {
-          result: result,
-          timeTaken: timeTaken,
-          gameName: gameName,
-          timestamp: new Date()
-        });
+    const userRef = doc(db, "focus", user.email);
 
-        Alert.alert("Game Over!", `Result: ${result}, Time: ${timeTaken}s`, [
-          { text: "OK", onPress: () => navigation.navigate("ADHD") }
-        ]);
-      } catch (error) {
-        console.error("Error saving score:", error);
-      }
+    try {
+      const userDoc = await getDoc(userRef);
+      const attempts = userDoc.exists() ? userDoc.data().attempts || [] : [];
+      
+      const newAttempt = {
+        attempt: attempts.length + 1,
+        result: won ? "Found" : "Not Found",
+        objectName: selectedObject?.name || "Unknown",
+        timeTaken: timeTaken,
+        timestamp: new Date().toISOString()
+      };
+
+      await setDoc(userRef, {
+        email: user.email,
+        attempts: [...attempts, newAttempt],
+      }, { merge: true });
+
+      Alert.alert(
+        won ? "Success!" : "Time's Up!",
+        `You ${won ? "found" : "didn't find"} the ${selectedObject?.name || "object"} in ${timeTaken}s`,
+        [{ text: "OK", onPress: () => navigation.goBack() }]
+      );
+    } catch (error) {
+      console.error("Error saving game result:", error);
+      Alert.alert("Error", "Failed to save game results");
     }
   };
 
   const startGame = () => {
     setGameStarted(true);
+    setFoundObject(false);
+    setTimer(60);
   };
 
   return (
@@ -117,15 +139,15 @@ const FindTheObjectGame = () => {
       ) : (
         <TouchableOpacity
           style={styles.button}
-          onPress={handleFindObject}
-          disabled={foundObject}
+          onPress={() => handleFindObject({ nativeEvent: { locationX: 0, locationY: 0 } })}
+          disabled={foundObject || timer === 0}
         >
           <Text style={styles.buttonText}>I Found the Object!</Text>
         </TouchableOpacity>
       )}
 
-      {foundObject && <Text style={styles.result}>Result: Yes</Text>}
-      {!foundObject && gameStarted && timer === 0 && <Text style={styles.result}>Result: No</Text>}
+      {foundObject && <Text style={styles.result}>Result: Found</Text>}
+      {!foundObject && gameStarted && timer === 0 && <Text style={styles.result}>Result: Not Found</Text>}
     </View>
   );
 };

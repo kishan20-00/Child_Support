@@ -1,20 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, StyleSheet } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
 
-// Function to generate a new number line problem
+// Function to generate a new number line problem with options
 const generateProblem = () => {
   const start = Math.floor(Math.random() * 20) + 1; // Start number (1-20)
   const addNumber = Math.floor(Math.random() * 20) + 1; // Hidden number (1-20)
   const sum = start + addNumber; // Sum shown to user
-  return { start, sum, addNumber };
+
+  // Generate 4 options including the correct one
+  const options = new Set();
+  options.add(addNumber);
+  while (options.size < 4) {
+    options.add(Math.floor(Math.random() * 20) + 1);
+  }
+
+  // Shuffle options
+  const shuffledOptions = Array.from(options).sort(() => Math.random() - 0.5);
+
+  return { start, sum, addNumber, options: shuffledOptions };
 };
 
 export default function NumberLineGame() {
   const [problem, setProblem] = useState(generateProblem());
-  const [userInput, setUserInput] = useState('');
   const [user, setUser] = useState(null);
   const navigation = useNavigation();
 
@@ -23,8 +33,8 @@ export default function NumberLineGame() {
     if (currentUser) setUser(currentUser);
   }, []);
 
-  const checkAnswer = async () => {
-    const isCorrect = parseInt(userInput) === problem.addNumber;
+  const checkAnswer = async (selectedOption) => {
+    const isCorrect = selectedOption === problem.addNumber;
     const score = isCorrect ? 1 : 0;
 
     if (user) {
@@ -42,10 +52,9 @@ export default function NumberLineGame() {
       Alert.alert(isCorrect ? '✅ Correct!' : '❌ Wrong!', `Your score: ${score}`);
 
       if (isCorrect) {
-        navigation.navigate('Dyscalculia');
+        navigation.goBack();
       } else {
         setProblem(generateProblem()); // Generate new problem
-        setUserInput('');
       }
     }
   };
@@ -60,19 +69,23 @@ export default function NumberLineGame() {
       <View style={styles.numberLine}>
         <Text style={styles.number}>{problem.start}</Text>
         <Text style={styles.plus}>+</Text>
-        <TextInput
-          style={styles.input}
-          keyboardType="numeric"
-          value={userInput}
-          onChangeText={setUserInput}
-        />
+        <Text style={styles.questionMark}>?</Text>
         <Text style={styles.equals}>=</Text>
         <Text style={styles.number}>{problem.sum}</Text>
       </View>
 
-      <TouchableOpacity style={styles.button} onPress={checkAnswer}>
-        <Text style={styles.buttonText}>Submit</Text>
-      </TouchableOpacity>
+      {/* Multiple-Choice Options */}
+      <View style={styles.optionsContainer}>
+        {problem.options.map((option, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.optionButton}
+            onPress={() => checkAnswer(option)}
+          >
+            <Text style={styles.optionText}>{option}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </View>
   );
 }
@@ -86,8 +99,8 @@ const styles = StyleSheet.create({
   number: { fontSize: 28, fontWeight: 'bold', marginHorizontal: 10 },
   plus: { fontSize: 28, fontWeight: 'bold', color: 'blue' },
   equals: { fontSize: 28, fontWeight: 'bold', color: 'green', marginHorizontal: 10 },
-  input: { borderBottomWidth: 2, borderBottomColor: 'black', width: 60, fontSize: 28, textAlign: 'center' },
-  button: { backgroundColor: '#2196F3', padding: 12, borderRadius: 8, marginTop: 20, width: '60%', alignItems: 'center' },
-  buttonText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+  questionMark: { fontSize: 28, fontWeight: 'bold', color: 'red', marginHorizontal: 10 },
+  optionsContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginVertical: 20 },
+  optionButton: { backgroundColor: '#2196F3', padding: 15, borderRadius: 8, margin: 5, minWidth: '40%', alignItems: 'center' },
+  optionText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
 });
-

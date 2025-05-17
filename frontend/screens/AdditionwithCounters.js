@@ -1,24 +1,36 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
 
-const getRandomStart = () => Math.floor(Math.random() * 10) + 1; // Start between 1-10
-const getRandomStep = () => Math.floor(Math.random() * 5) + 1; // Step between 1-5
+const getRandomNumber = () => Math.floor(Math.random() * 10) + 1; // Random number between 1-10
 
-const generatePattern = () => {
-  const start = getRandomStart();
-  const step = getRandomStep();
-  const pattern = [start, start + step, start + 2 * step, start + 3 * step];
-  const answer = start + 4 * step;
-  return { pattern, answer };
+const generateEquation = () => {
+  const numbers = Array.from({ length: 4 }, getRandomNumber); // Generate 4 random numbers
+  const correctAnswer = numbers.reduce((sum, num) => sum + num, 0); // Calculate their sum
+
+  // Generate multiple-choice options
+  const options = new Set();
+  options.add(correctAnswer);
+  while (options.size < 4) {
+    const randomOffset = Math.floor(Math.random() * 10) - 5; // Random offset between -5 and +5
+    const distractor = correctAnswer + randomOffset;
+    if (distractor !== correctAnswer && distractor > 0) {
+      options.add(distractor);
+    }
+  }
+
+  // Shuffle options
+  const shuffledOptions = Array.from(options).sort(() => Math.random() - 0.5);
+
+  return { numbers, correctAnswer, options: shuffledOptions };
 };
 
-function AdditionWithCounters() {
-  const [sequence, setSequence] = useState([]);
-  const [correctAnswer, setCorrectAnswer] = useState(null);
-  const [userAnswer, setUserAnswer] = useState('');
+function AdditionGame() {
+  const [numbers, setNumbers] = useState([]);
+  const [options, setOptions] = useState([]);
+  const correctAnswerRef = useRef(null); // Use ref for consistent access to correctAnswer
   const [user, setUser] = useState(null);
 
   const navigation = useNavigation();
@@ -26,22 +38,25 @@ function AdditionWithCounters() {
   useEffect(() => {
     const currentUser = auth.currentUser;
     if (currentUser) setUser(currentUser);
-    const { pattern, answer } = generatePattern();
-    setSequence(pattern);
-    setCorrectAnswer(answer);
+
+    generateNewEquation();
   }, []);
 
-  const checkAnswer = async () => {
-    if (!userAnswer) {
-      Alert.alert('Please enter an answer!');
-      return;
-    }
+  const generateNewEquation = () => {
+    const { numbers, correctAnswer, options } = generateEquation();
+    setNumbers(numbers);
+    correctAnswerRef.current = correctAnswer; // Update the ref
+    setOptions(options);
+  };
 
-    const isCorrect = parseInt(userAnswer) === correctAnswer;
+  const checkAnswer = async (selectedOption) => {
+    const selectedNumber = Number(selectedOption); // Ensure selectedOption is treated as a number
+
+    const isCorrect = selectedNumber === correctAnswerRef.current; // Compare with the ref value
     const score = isCorrect ? 1 : 0;
 
     if (user) {
-      const userRef = doc(db, 'addition_counters', user.email);
+      const userRef = doc(db, 'addition_game', user.email);
       const userDoc = await getDoc(userRef);
       let newData = { email: user.email, attempts: [] };
 
@@ -52,40 +67,36 @@ function AdditionWithCounters() {
       newData.attempts.push({ attempt: newData.attempts.length + 1, score });
 
       await setDoc(userRef, newData);
-      Alert.alert(isCorrect ? 'Correct!' : 'Wrong!', `Your score: ${score}`);
+      Alert.alert(isCorrect ? '✅ Correct!' : '❌ Wrong!', `Your score: ${score}`);
 
-      // Navigate to Home if correct
       if (isCorrect) {
-        navigation.navigate('Dyscalculia');
+        navigation.goBack();
       }
     }
 
-    // Generate a new pattern
-    const { pattern, answer } = generatePattern();
-    setSequence(pattern);
-    setCorrectAnswer(answer);
-    setUserAnswer('');
+    // Generate a new equation after processing the current one
+    generateNewEquation();
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Complete the Number Pattern</Text>
-      <View style={styles.sequenceContainer}>
-        {sequence.map((num, index) => (
-          <Text key={index} style={styles.number}>{num}</Text>
+      <Text style={styles.title}>Solve the Addition Problem</Text>
+      <Text style={styles.equation}>
+        {numbers.join(' + ')} = ?
+      </Text>
+
+      {/* Multiple-choice options */}
+      <View style={styles.optionsContainer}>
+        {options.map((option, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.optionButton}
+            onPress={() => checkAnswer(option)}
+          >
+            <Text style={styles.optionText}>{option}</Text>
+          </TouchableOpacity>
         ))}
-        <Text style={styles.questionMark}>?</Text>
       </View>
-      <TextInput
-        style={styles.input}
-        keyboardType="numeric"
-        placeholder="Enter the last number"
-        value={userAnswer}
-        onChangeText={setUserAnswer}
-      />
-      <TouchableOpacity style={styles.button} onPress={checkAnswer}>
-        <Text style={styles.buttonText}>Submit</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -93,12 +104,10 @@ function AdditionWithCounters() {
 const styles = StyleSheet.create({
   container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f5f5' },
   title: { fontSize: 22, fontWeight: 'bold', marginBottom: 20 },
-  sequenceContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  number: { fontSize: 24, fontWeight: 'bold', marginHorizontal: 10 },
-  questionMark: { fontSize: 24, fontWeight: 'bold', color: 'red', marginHorizontal: 10 },
-  input: { borderWidth: 1, borderColor: '#ccc', padding: 10, width: '50%', textAlign: 'center', fontSize: 18, marginBottom: 20 },
-  button: { backgroundColor: '#007BFF', padding: 10, borderRadius: 5 },
-  buttonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  equation: { fontSize: 26, fontWeight: 'bold', marginBottom: 20 },
+  optionsContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginVertical: 20 },
+  optionButton: { backgroundColor: '#007BFF', padding: 15, borderRadius: 8, margin: 5, minWidth: '40%', alignItems: 'center' },
+  optionText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
 });
 
-export default AdditionWithCounters;
+export default AdditionGame;

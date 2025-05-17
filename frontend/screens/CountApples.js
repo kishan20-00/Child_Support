@@ -24,12 +24,48 @@ const CountApplesGame = () => {
   const [options, setOptions] = useState(generateOptions(appleCount));
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [user, setUser] = useState(null);
+  const [timer, setTimer] = useState(60);
+  const [isNavigatingAway, setIsNavigatingAway] = useState(false);
 
   useEffect(() => {
     const currentUser = auth.currentUser;
     if (currentUser) setUser(currentUser);
     setOptions(generateOptions(appleCount));
   }, [appleCount]);
+
+  useEffect(() => {
+    const countdown = setInterval(() => {
+      setTimer((prev) => {
+        if (prev > 0) return prev - 1;
+        clearInterval(countdown);
+        if (!isNavigatingAway) handleGameLoss();
+        return 0;
+      });
+    }, 1000);
+
+    return () => clearInterval(countdown);
+  }, [isNavigatingAway]);
+
+  const handleGameLoss = async () => {
+    if (user) {
+      const userRef = doc(db, "count_apples", user.email);
+      const userDoc = await getDoc(userRef);
+
+      let newData = { email: user.email, attempts: [] };
+      if (userDoc.exists()) {
+        newData = userDoc.data();
+      }
+      newData.attempts.push({
+        attempt: newData.attempts.length + 1,
+        score: 0,
+        timestamp: new Date(),
+      });
+
+      await setDoc(userRef, newData);
+    }
+    Alert.alert("Time's up!", "You lost the game.");
+    resetGame();
+  };
 
   const handleAnswer = async (option) => {
     setSelectedAnswer(option);
@@ -55,17 +91,33 @@ const CountApplesGame = () => {
       Alert.alert(isCorrect ? "Correct!" : "Wrong!", `Your score: ${score}`);
     }
 
-    // Move to the next round
-    setTimeout(() => {
-      setAppleCount(getRandomAppleCount());
-      setOptions(generateOptions(appleCount));
-      setSelectedAnswer(null);
-    }, 1000);
+    if (isCorrect) {
+      navigation.goBack();
+    } else {
+      setTimeout(() => resetGame(), 1000);
+    }
   };
+
+  const resetGame = () => {
+    setAppleCount(getRandomAppleCount());
+    setOptions(generateOptions(appleCount));
+    setSelectedAnswer(null);
+    setTimer(60);
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', () => {
+      setIsNavigatingAway(true); // Prevent further actions when navigating away
+      setTimer(0); // Stops the timer
+    });
+
+    return unsubscribe;
+  }, [navigation]);
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Count the Apples</Text>
+      <Text style={styles.timer}>Time Left: {timer} seconds</Text>
       <View style={styles.appleContainer}>
         {Array.from({ length: appleCount }).map((_, index) => (
           <Text key={index} style={styles.appleEmoji}>🍎</Text>
@@ -96,7 +148,8 @@ const CountApplesGame = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 20 },
+  title: { fontSize: 24, fontWeight: "bold", marginBottom: 10 },
+  timer: { fontSize: 18, marginBottom: 20, color: "red" },
   appleContainer: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", marginBottom: 20 },
   appleEmoji: { fontSize: 40, margin: 5 },
   optionsContainer: { width: "100%", alignItems: "center" },

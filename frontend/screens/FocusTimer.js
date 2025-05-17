@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigation } from '@react-navigation/native';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { auth, db } from '../firebaseConfig';
-import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 
 const emojis = ['🍎', '🌳', '🚩', '🐶', '🍕', '🎈', '🚗', '📚', '⚽', '🍦'];
 
@@ -13,28 +14,35 @@ const FocusTimerGame = () => {
   const [score, setScore] = useState(0);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);
-  const [isFirstLoad, setIsFirstLoad] = useState(true); // New state to handle first load
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
+  const [user, setUser] = useState(null);
+  const [timeStarted, setTimeStarted] = useState(null);
+  const navigation = useNavigation();
 
   useEffect(() => {
-    const fetchAge = async () => {
-      const user = auth.currentUser;
-      if (user) {
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('email', '==', user.email));
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-          const userDoc = querySnapshot.docs[0];
-          setAge(userDoc.data().age);
-          console.log('Fetched Age:', userDoc.data().age); // Debugging
-        } else {
-          Alert.alert('Error', 'User profile not found.');
-        }
-      }
-    };
-
-    fetchAge();
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      setUser(currentUser);
+      fetchUserAge(currentUser);
+    }
   }, []);
+
+  const fetchUserAge = async (user) => {
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', user.email));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        const userDoc = querySnapshot.docs[0];
+        setAge(userDoc.data().age);
+      } else {
+        Alert.alert('Error', 'User profile not found.');
+      }
+    } catch (error) {
+      console.error("Error fetching user age:", error);
+    }
+  };
 
   const startGame = () => {
     if (!age) {
@@ -42,20 +50,18 @@ const FocusTimerGame = () => {
       return;
     }
 
-    setIsFirstLoad(false); // Mark that the game has started at least once
-
-    // Convert age to a number (if it's a string)
+    setIsFirstLoad(false);
+    setTimeStarted(new Date());
+    
     const userAge = Number(age);
-
-    // Set numEmojis based on age
-    const numEmojis = userAge === 8 ? 4 : 7; // 4 emojis if age is 8, else 7
-    console.log(`Age: ${userAge}, numEmojis: ${numEmojis}`); // Debugging
-
+    const numEmojis = userAge === 8 ? 4 : 7;
     const randomSequence = [];
+    
     for (let i = 0; i < numEmojis; i++) {
       const randomIndex = Math.floor(Math.random() * emojis.length);
       randomSequence.push(emojis[randomIndex]);
     }
+    
     setSequence(randomSequence);
     setDisplaySequence([]);
     setUserSequence([]);
@@ -85,32 +91,55 @@ const FocusTimerGame = () => {
   };
 
   useEffect(() => {
-    if (userSequence.length === sequence.length) {
+    if (userSequence.length === sequence.length && sequence.length > 0) {
       const correctEmojis = new Set(sequence);
       const userEmojis = new Set(userSequence);
       const matchedEmojis = [...userEmojis].filter((emoji) => correctEmojis.has(emoji)).length;
 
       setScore(matchedEmojis);
-      saveScore(matchedEmojis);
+      handleGameEnd(matchedEmojis);
     }
   }, [userSequence]);
 
-  const saveScore = async (correctCount) => {
-    const user = auth.currentUser;
-    if (user) {
-      try {
-        await addDoc(collection(db, 'adhd_mitigation'), {
-          email: user.email,
-          gameName: 'Focus Timer',
-          score: correctCount,
-          timestamp: new Date(),
-        });
-        Alert.alert('Game Over!', `Your score: ${correctCount}/${sequence.length}`, [
-          { text: 'OK', onPress: () => setGameStarted(false) },
-        ]);
-      } catch (error) {
-        console.error('Error saving score:', error);
-      }
+  const handleGameEnd = async (correctCount) => {
+    if (!user.email) {
+      console.log("User not found, cannot save result!");
+      return;
+    }
+
+    const timeEnded = new Date();
+    const timeTaken = timeStarted ? (timeEnded - timeStarted) / 1000 : 0;
+
+    const userRef = doc(db, "focus_timer_game", user.email);
+
+    try {
+      const userDoc = await getDoc(userRef);
+      const attempts = userDoc.exists() ? userDoc.data().attempts || [] : [];
+      
+      const newAttempt = {
+        attempt: attempts.length + 1,
+        score: correctCount,
+        totalPossible: sequence.length,
+        accuracy: (correctCount / sequence.length * 100).toFixed(1) + '%',
+        timeTaken: timeTaken,
+        age: age,
+        sequenceLength: sequence.length,
+        timestamp: new Date().toISOString()
+      };
+
+      await setDoc(userRef, {
+        email: user.email,
+        attempts: [...attempts, newAttempt],
+      }, { merge: true });
+
+      Alert.alert(
+        'Game Over!',
+        `You matched ${correctCount} out of ${sequence.length} emojis (${(correctCount / sequence.length * 100).toFixed(1)}%)`,
+        [{ text: 'OK', onPress: () => setGameStarted(false) }]
+      );
+      navigation.goBack();
+    } catch (error) {
+      console.error("Error saving game result:", error);
     }
   };
 
@@ -177,6 +206,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
+    padding: 20
   },
   startContainer: {
     alignItems: 'center',
@@ -185,17 +215,21 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 20,
+    color: '#333'
   },
   instruction: {
     fontSize: 18,
     marginBottom: 20,
+    color: '#666'
   },
   gameContainer: {
     alignItems: 'center',
+    width: '100%'
   },
   timer: {
     fontSize: 18,
     marginBottom: 20,
+    color: '#333'
   },
   sequenceContainer: {
     flexDirection: 'row',
@@ -209,6 +243,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     alignItems: 'center',
+    width: '100%'
   },
   emojiButtonsContainer: {
     flexDirection: 'row',
@@ -225,12 +260,15 @@ const styles = StyleSheet.create({
   userSequence: {
     fontSize: 18,
     marginTop: 20,
+    color: '#333'
   },
   button: {
     backgroundColor: '#007BFF',
-    padding: 10,
-    borderRadius: 5,
+    padding: 12,
+    borderRadius: 8,
     marginTop: 10,
+    minWidth: 150,
+    alignItems: 'center'
   },
   buttonText: {
     color: '#fff',
